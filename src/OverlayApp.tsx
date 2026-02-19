@@ -139,7 +139,7 @@ export default function OverlayApp() {
         wpm={wpm}
         textColor={settings.textColor}
         onPlayPause={engine.status === 'idle' ? engine.start : engine.togglePause}
-        onRestart={engine.restart}
+        onStop={engine.restart}
         onWpmChange={handleWpmChange}
         onClose={handleClose}
       />

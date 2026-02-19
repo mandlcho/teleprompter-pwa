@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { AppSettings } from '@/types';
 import { FONT_SIZE_PX } from '@/types';
 
@@ -13,7 +13,21 @@ interface ScrollingTextProps {
 export function ScrollingText({ text, scrollY, settings, contentRef, onClick }: ScrollingTextProps) {
   const fsPx = FONT_SIZE_PX[settings.fontSize];
   const lineHeight = fsPx * 1.55;
-  const focalPosition = '35%';
+
+  // Measure the scroll container so we can pad by exactly half its height,
+  // keeping the active line vertically centered at all times.
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const [halfHeight, setHalfHeight] = useState(80);
+
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+    const update = () => setHalfHeight(el.clientHeight / 2);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     if (contentRef.current) {
@@ -23,16 +37,17 @@ export function ScrollingText({ text, scrollY, settings, contentRef, onClick }: 
 
   return (
     <div
-      className="relative flex-1 overflow-hidden cursor-pointer"
+      ref={wrapperRef}
+      className="relative flex-1 overflow-hidden cursor-pointer w-full h-full"
       onClick={onClick}
       style={{ userSelect: 'none' }}
     >
-      {/* Focal line */}
+      {/* Focal line — centered in the container */}
       {settings.showFocalLine && (
         <div
           className="absolute left-0 right-0 pointer-events-none z-10"
           style={{
-            top: focalPosition,
+            top: `${halfHeight - lineHeight / 2}px`,
             height: `${lineHeight}px`,
             background: 'rgba(255,255,255,0.07)',
             borderTop: '1px solid rgba(255,255,255,0.12)',
@@ -45,25 +60,27 @@ export function ScrollingText({ text, scrollY, settings, contentRef, onClick }: 
       <div
         className="absolute top-0 left-0 right-0 pointer-events-none z-10"
         style={{
-          height: '80px',
+          height: `${halfHeight * 0.6}px`,
           background: `linear-gradient(to bottom, ${settings.backgroundColor}ee, transparent)`,
         }}
       />
       <div
         className="absolute bottom-0 left-0 right-0 pointer-events-none z-10"
         style={{
-          height: '80px',
+          height: `${halfHeight * 0.6}px`,
           background: `linear-gradient(to top, ${settings.backgroundColor}ee, transparent)`,
         }}
       />
 
-      {/* Scrolling content */}
+      {/* Scrolling content
+          paddingTop = halfHeight so the first word starts centered.
+          paddingBottom = halfHeight so the last word ends centered. */}
       <div
         ref={contentRef}
         className="px-6 will-change-transform"
         style={{
-          paddingTop: focalPosition,
-          paddingBottom: '60%',
+          paddingTop: `${halfHeight}px`,
+          paddingBottom: `${halfHeight}px`,
           fontFamily: settings.fontFamily,
           fontSize: `${fsPx}px`,
           lineHeight: `${lineHeight}px`,

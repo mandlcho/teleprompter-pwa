@@ -1,4 +1,3 @@
-import { useState, useEffect, useRef } from 'react';
 import type { TeleprompterStatus } from '@/types';
 
 interface OverlayControlsProps {
@@ -6,7 +5,7 @@ interface OverlayControlsProps {
   wpm: number;
   textColor: string;
   onPlayPause: () => void;
-  onRestart: () => void;
+  onStop: () => void;
   onWpmChange: (delta: number) => void;
   onClose: () => void;
 }
@@ -16,44 +15,24 @@ export function OverlayControls({
   wpm,
   textColor,
   onPlayPause,
-  onRestart,
+  onStop,
   onWpmChange,
   onClose,
 }: OverlayControlsProps) {
-  const [visible, setVisible] = useState(true);
-  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const resetHideTimer = () => {
-    setVisible(true);
-    if (hideTimer.current) clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(() => setVisible(false), 2500);
-  };
-
-  useEffect(() => {
-    resetHideTimer();
-    return () => {
-      if (hideTimer.current) clearTimeout(hideTimer.current);
-    };
-  }, []);
-
   const isPlaying = status === 'scrolling';
   const isIdle = status === 'idle';
   const isDone = status === 'done';
+  const isActive = isPlaying || status === 'paused';
 
   const btnBase =
     'flex items-center justify-center rounded transition-all duration-150 select-none';
   const iconBtn = `${btnBase} w-7 h-7 text-sm hover:bg-white/20 active:scale-95`;
 
   return (
-    <div
-      onMouseMove={resetHideTimer}
-      onMouseEnter={resetHideTimer}
-      className="transition-opacity duration-300 px-3 pb-2"
-      style={{ opacity: visible ? 1 : 0, pointerEvents: visible ? 'auto' : 'none' }}
-    >
+    <div className="px-3 pb-2 pt-1">
       <div
         className="flex items-center gap-1 rounded-lg px-2 py-1"
-        style={{ background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(6px)' }}
+        style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(8px)' }}
       >
         {/* Play / Pause */}
         {!isDone && (
@@ -63,19 +42,19 @@ export function OverlayControls({
             style={{ color: textColor }}
             title={isIdle ? 'Start' : isPlaying ? 'Pause' : 'Resume'}
           >
-            {isIdle || !isPlaying ? '▶' : '⏸'}
+            {isPlaying ? '⏸' : '▶'}
           </button>
         )}
 
-        {/* Restart */}
-        {(isPlaying || status === 'paused' || isDone) && (
+        {/* Stop (shown while active or done) */}
+        {(isActive || isDone) && (
           <button
-            onClick={onRestart}
+            onClick={onStop}
             className={iconBtn}
-            style={{ color: textColor, opacity: 0.7 }}
-            title="Restart"
+            style={{ color: textColor, opacity: 0.75 }}
+            title="Stop"
           >
-            ↺
+            ■
           </button>
         )}
 
@@ -83,7 +62,7 @@ export function OverlayControls({
 
         {/* WPM indicator + nudge */}
         <span
-          className="text-xs tabular-nums px-1"
+          className="tabular-nums px-1"
           style={{ color: textColor, opacity: 0.55, fontSize: '11px' }}
         >
           {wpm} wpm
@@ -92,7 +71,7 @@ export function OverlayControls({
           onClick={() => onWpmChange(-10)}
           className={iconBtn}
           style={{ color: textColor, opacity: 0.7 }}
-          title="Slower"
+          title="Slower (−10 wpm)"
         >
           –
         </button>
@@ -100,7 +79,7 @@ export function OverlayControls({
           onClick={() => onWpmChange(+10)}
           className={iconBtn}
           style={{ color: textColor, opacity: 0.7 }}
-          title="Faster"
+          title="Faster (+10 wpm)"
         >
           +
         </button>
