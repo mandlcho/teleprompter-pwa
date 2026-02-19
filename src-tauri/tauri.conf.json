@@ -1,0 +1,61 @@
+{
+  "productName": "Teleprompter",
+  "version": "0.1.0",
+  "identifier": "com.elementa.teleprompter",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": "npm run dev:vite",
+    "beforeBuildCommand": "npm run build:vite"
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico",
+      "icons/icon.icns"
+    ]
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "control",
+        "title": "Teleprompter",
+        "url": "/",
+        "width": 480,
+        "height": 780,
+        "minWidth": 420,
+        "minHeight": 600,
+        "resizable": true,
+        "center": true,
+        "alwaysOnTop": false,
+        "decorations": true,
+        "transparent": false,
+        "visible": true,
+        "focus": true
+      },
+      {
+        "label": "overlay",
+        "title": "Teleprompter Overlay",
+        "url": "/overlay",
+        "width": 680,
+        "height": 260,
+        "minWidth": 320,
+        "minHeight": 140,
+        "resizable": true,
+        "alwaysOnTop": true,
+        "decorations": false,
+        "transparent": true,
+        "visible": false,
+        "skipTaskbar": true,
+        "shadow": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  }
+}

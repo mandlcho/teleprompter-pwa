@@ -1,0 +1,10 @@
+# Cargo configuration for Teleprompter
+# Explicitly uses MSVC link.exe so builds work from Git Bash / any shell
+# without needing "x64 Native Tools Command Prompt for VS 2022".
+
+[target.x86_64-pc-windows-msvc]
+linker = "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\link.exe"
+
+[env]
+# Windows SDK + MSVC library paths so the linker can find kernel32.lib etc.
+LIB = "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\lib\\x64;C:\\Program Files (x86)\\Windows Kits\\10\\Lib\\10.0.26100.0\\um\\x64;C:\\Program Files (x86)\\Windows Kits\\10\\Lib\\10.0.26100.0\\ucrt\\x64"

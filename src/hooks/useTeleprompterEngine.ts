@@ -1,174 +1,216 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import type { TeleprompterStatus } from '@/types';
-import { countWords } from '@/utils/wordCounter';
+import { FONT_SIZE_PX } from '@/types';
+import type { FontSize } from '@/types';
 
-interface UseTeleprompterEngineProps {
+interface EngineOptions {
   text: string;
   wpm: number;
-  contentHeightPx: number;
-  viewportHeightPx: number;
-  onDone: () => void;
+  fontSize: FontSize;
+  showCountdown: boolean;
+  onDone?: () => void;
+  onStatusChange?: (status: TeleprompterStatus) => void;
+  onProgress?: (progress: number, remainingSeconds: number) => void;
 }
 
-interface UseTeleprompterEngineReturn {
+interface EngineState {
   status: TeleprompterStatus;
-  scrollOffsetPx: number;
-  countdownValue: 3 | 2 | 1 | null;
-  elapsedSeconds: number;
-  totalSeconds: number;
-  start: () => void;
-  pause: () => void;
-  resume: () => void;
-  restart: () => void;
-  togglePause: () => void;
+  countdownValue: number;
+  scrollY: number;
+  progress: number;
+  remainingSeconds: number;
 }
 
-export function useTeleprompterEngine({
-  text,
-  wpm,
-  contentHeightPx,
-  viewportHeightPx,
-  onDone,
-}: UseTeleprompterEngineProps): UseTeleprompterEngineReturn {
+interface EngineControls {
+  start: () => void;
+  togglePause: () => void;
+  restart: () => void;
+  adjustWpm: (delta: number) => void;
+  contentRef: React.MutableRefObject<HTMLDivElement | null>;
+}
+
+export function useTeleprompterEngine(options: EngineOptions): EngineState & EngineControls {
+  const { text, wpm, fontSize, showCountdown, onDone, onStatusChange, onProgress } = options;
+
   const [status, setStatus] = useState<TeleprompterStatus>('idle');
-  const [scrollOffsetPx, setScrollOffsetPx] = useState(0);
-  const [countdownValue, setCountdownValue] = useState<3 | 2 | 1 | null>(null);
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [countdownValue, setCountdownValue] = useState(3);
+  const [scrollY, setScrollY] = useState(0);
+  const [progress, setProgress] = useState(0);
+  const [remainingSeconds, setRemainingSeconds] = useState(0);
 
+  const contentRef = useRef<HTMLDivElement | null>(null);
   const rafRef = useRef<number | null>(null);
-  const lastTimestampRef = useRef<number | null>(null);
-  const currentOffsetRef = useRef(0);
-  const elapsedRef = useRef(0);
+  const lastTimeRef = useRef<number | null>(null);
+  const scrollYRef = useRef(0);
   const wpmRef = useRef(wpm);
-  const contentHeightRef = useRef(contentHeightPx);
-  const viewportHeightRef = useRef(viewportHeightPx);
   const statusRef = useRef<TeleprompterStatus>('idle');
-  const onDoneRef = useRef(onDone);
 
-  // Keep refs in sync with props/state
-  useEffect(() => { wpmRef.current = wpm; }, [wpm]);
-  useEffect(() => { contentHeightRef.current = contentHeightPx; }, [contentHeightPx]);
-  useEffect(() => { viewportHeightRef.current = viewportHeightPx; }, [viewportHeightPx]);
-  useEffect(() => { onDoneRef.current = onDone; }, [onDone]);
+  // Keep wpmRef in sync for RAF access without stale closure
+  useEffect(() => {
+    wpmRef.current = wpm;
+  }, [wpm]);
 
-  const wordCount = countWords(text);
-  const totalSeconds = wpm > 0 && wordCount > 0 ? Math.round((wordCount / wpm) * 60) : 0;
+  const updateStatus = useCallback((s: TeleprompterStatus) => {
+    statusRef.current = s;
+    setStatus(s);
+    onStatusChange?.(s);
+  }, [onStatusChange]);
 
-  const stopRaf = useCallback(() => {
+  const getMaxScroll = useCallback(() => {
+    const el = contentRef.current;
+    if (!el) return 0;
+    return Math.max(0, el.scrollHeight - el.parentElement!.clientHeight);
+  }, []);
+
+  const getPixelsPerSecond = useCallback(() => {
+    // Approximate: one word ≈ 5 chars wide ≈ fontSize * 0.6 px
+    // One word takes 60/wpm seconds
+    // px/s = fontSize_px * 0.6 / (60 / wpm) = fontSize_px * 0.6 * wpm / 60
+    const fsPx = FONT_SIZE_PX[fontSize];
+    return (fsPx * 0.6 * wpmRef.current) / 60;
+  }, [fontSize]);
+
+  const getTotalDuration = useCallback(() => {
+    const maxScroll = getMaxScroll();
+    const pps = getPixelsPerSecond();
+    return pps > 0 ? maxScroll / pps : 0;
+  }, [getMaxScroll, getPixelsPerSecond]);
+
+  const scroll = useCallback((timestamp: number) => {
+    if (statusRef.current !== 'scrolling') return;
+
+    if (lastTimeRef.current === null) {
+      lastTimeRef.current = timestamp;
+    }
+
+    const delta = (timestamp - lastTimeRef.current) / 1000;
+    lastTimeRef.current = timestamp;
+
+    const pps = getPixelsPerSecond();
+    const newScrollY = scrollYRef.current + pps * delta;
+    const maxScroll = getMaxScroll();
+
+    if (newScrollY >= maxScroll) {
+      scrollYRef.current = maxScroll;
+      setScrollY(maxScroll);
+      setProgress(1);
+      setRemainingSeconds(0);
+      onProgress?.(1, 0);
+      updateStatus('done');
+      onDone?.();
+      return;
+    }
+
+    scrollYRef.current = newScrollY;
+    setScrollY(newScrollY);
+
+    const totalDuration = getTotalDuration();
+    const elapsed = newScrollY / pps;
+    const prog = totalDuration > 0 ? elapsed / totalDuration : 0;
+    const remaining = Math.max(0, totalDuration - elapsed);
+    setProgress(prog);
+    setRemainingSeconds(remaining);
+    onProgress?.(prog, remaining);
+
+    rafRef.current = requestAnimationFrame(scroll);
+  }, [getPixelsPerSecond, getMaxScroll, getTotalDuration, onDone, onProgress, updateStatus]);
+
+  const startScrolling = useCallback(() => {
+    lastTimeRef.current = null;
+    updateStatus('scrolling');
+    rafRef.current = requestAnimationFrame(scroll);
+  }, [scroll, updateStatus]);
+
+  const runCountdown = useCallback(() => {
+    if (!showCountdown) {
+      startScrolling();
+      return;
+    }
+    updateStatus('countdown');
+    setCountdownValue(3);
+    let count = 3;
+    const interval = setInterval(() => {
+      count--;
+      if (count <= 0) {
+        clearInterval(interval);
+        startScrolling();
+      } else {
+        setCountdownValue(count);
+      }
+    }, 800);
+  }, [showCountdown, startScrolling, updateStatus]);
+
+  const start = useCallback(() => {
+    if (status !== 'idle') return;
+    scrollYRef.current = 0;
+    setScrollY(0);
+    setProgress(0);
+    runCountdown();
+  }, [status, runCountdown]);
+
+  const togglePause = useCallback(() => {
+    if (statusRef.current === 'scrolling') {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      lastTimeRef.current = null;
+      updateStatus('paused');
+    } else if (statusRef.current === 'paused') {
+      updateStatus('scrolling');
+      rafRef.current = requestAnimationFrame(scroll);
+    }
+  }, [scroll, updateStatus]);
+
+  const restart = useCallback(() => {
     if (rafRef.current !== null) {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     }
-    lastTimestampRef.current = null;
+    scrollYRef.current = 0;
+    setScrollY(0);
+    setProgress(0);
+    lastTimeRef.current = null;
+    updateStatus('idle');
+  }, [updateStatus]);
+
+  const adjustWpm = useCallback((_delta: number) => {
+    // WPM changes are driven by the parent; this is a no-op hook
+    // The parent component should update the wpm prop via state
   }, []);
 
-  const runFrame = useCallback((timestamp: number) => {
-    if (lastTimestampRef.current === null) {
-      lastTimestampRef.current = timestamp;
-    }
-    const delta = (timestamp - lastTimestampRef.current) / 1000;
-    lastTimestampRef.current = timestamp;
-
-    const h = contentHeightRef.current;
-    const vh = viewportHeightRef.current;
-    const wc = countWords(text);
-    const w = wpmRef.current;
-    const pxPerSecond = w > 0 && wc > 0 ? h / ((wc / w) * 60) : 0;
-
-    const newOffset = currentOffsetRef.current - pxPerSecond * delta;
-    const stopPoint = -(h - vh * 0.3);
-
-    elapsedRef.current += delta;
-    setElapsedSeconds(Math.floor(elapsedRef.current));
-
-    if (newOffset <= stopPoint) {
-      currentOffsetRef.current = stopPoint;
-      setScrollOffsetPx(stopPoint);
-      stopRaf();
-      setStatus('done');
-      statusRef.current = 'done';
-      onDoneRef.current();
-      return;
-    }
-
-    currentOffsetRef.current = newOffset;
-    setScrollOffsetPx(newOffset);
-    rafRef.current = requestAnimationFrame(runFrame);
-  }, [text, stopRaf]);
-
-  const startScrolling = useCallback(() => {
-    setStatus('scrolling');
-    statusRef.current = 'scrolling';
-    rafRef.current = requestAnimationFrame(runFrame);
-  }, [runFrame]);
-
-  const start = useCallback(() => {
-    if (text.trim() === '' || contentHeightRef.current === 0) return;
-
-    stopRaf();
-    currentOffsetRef.current = 0;
-    elapsedRef.current = 0;
-    setScrollOffsetPx(0);
-    setElapsedSeconds(0);
-    setCountdownValue(3);
-    setStatus('countdown');
-    statusRef.current = 'countdown';
-
-    let count = 3;
-    const tick = () => {
-      count -= 1;
-      if (count > 0) {
-        setCountdownValue(count as 3 | 2 | 1);
-        setTimeout(tick, 1000);
-      } else {
-        setCountdownValue(null);
-        startScrolling();
+  // Clean up RAF on unmount
+  useEffect(() => {
+    return () => {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
       }
     };
-    setTimeout(tick, 1000);
-  }, [text, stopRaf, startScrolling]);
+  }, []);
 
-  const pause = useCallback(() => {
-    if (statusRef.current !== 'scrolling') return;
-    stopRaf();
-    setStatus('paused');
-    statusRef.current = 'paused';
-  }, [stopRaf]);
-
-  const resume = useCallback(() => {
-    if (statusRef.current !== 'paused') return;
-    setStatus('scrolling');
-    statusRef.current = 'scrolling';
-    rafRef.current = requestAnimationFrame(runFrame);
-  }, [runFrame]);
-
-  const restart = useCallback(() => {
-    stopRaf();
-    currentOffsetRef.current = 0;
-    elapsedRef.current = 0;
-    setScrollOffsetPx(0);
-    setElapsedSeconds(0);
-    start();
-  }, [stopRaf, start]);
-
-  const togglePause = useCallback(() => {
-    if (statusRef.current === 'scrolling') pause();
-    else if (statusRef.current === 'paused') resume();
-  }, [pause, resume]);
-
-  // Cleanup on unmount
-  useEffect(() => () => stopRaf(), [stopRaf]);
+  // Reset when text changes
+  useEffect(() => {
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    scrollYRef.current = 0;
+    setScrollY(0);
+    setProgress(0);
+    setRemainingSeconds(0);
+    updateStatus('idle');
+  }, [text, updateStatus]);
 
   return {
     status,
-    scrollOffsetPx,
     countdownValue,
-    elapsedSeconds,
-    totalSeconds,
+    scrollY,
+    progress,
+    remainingSeconds,
     start,
-    pause,
-    resume,
-    restart,
     togglePause,
+    restart,
+    adjustWpm,
+    contentRef,
   };
 }
