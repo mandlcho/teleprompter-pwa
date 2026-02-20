@@ -22,36 +22,22 @@
   "app": {
     "windows": [
       {
-        "label": "control",
+        "label": "overlay",
         "title": "Teleprompter",
         "url": "/",
-        "width": 480,
-        "height": 780,
-        "minWidth": 420,
-        "minHeight": 600,
-        "resizable": true,
-        "center": true,
-        "alwaysOnTop": false,
-        "decorations": true,
-        "transparent": false,
-        "visible": true,
-        "focus": true
-      },
-      {
-        "label": "overlay",
-        "title": "Teleprompter Overlay",
-        "url": "/overlay",
         "width": 680,
-        "height": 260,
-        "minWidth": 320,
-        "minHeight": 140,
+        "height": 220,
+        "minWidth": 400,
+        "minHeight": 120,
         "resizable": true,
         "alwaysOnTop": true,
         "decorations": false,
         "transparent": true,
-        "visible": false,
-        "skipTaskbar": true,
-        "shadow": false
+        "visible": true,
+        "focus": true,
+        "skipTaskbar": false,
+        "shadow": false,
+        "center": true
       }
     ],
     "security": {
