@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { open } from '@tauri-apps/plugin-dialog';
 import { readTextFile } from '@tauri-apps/plugin-fs';
 import { DragHandle } from '@/components/Overlay/DragHandle';
@@ -132,6 +133,12 @@ export default function OverlayApp() {
     } catch { /* ignore */ }
   };
 
+  const handleClose = async () => {
+    try {
+      await getCurrentWindow().close();
+    } catch { /* ignore */ }
+  };
+
   const bgColor = hexToRgba(settings.backgroundColor, settings.overlayOpacity);
   const panelBg = hexToRgba(settings.backgroundColor, Math.min(1, settings.overlayOpacity + 0.1));
   const tc = settings.textColor;
@@ -146,7 +153,7 @@ export default function OverlayApp() {
     <div className="overlay-root flex flex-col w-screen h-screen animate-fade-in" style={{ background: bgColor }}>
 
       {/* ── Drag handle ── */}
-      <DragHandle onClose={() => {}} />
+      <DragHandle onClose={handleClose} />
 
       {/* ── Progress bar ── */}
       <ProgressBar
@@ -195,19 +202,19 @@ export default function OverlayApp() {
         )}
       </div>
 
-      {/* ── Collapsible panel ── */}
+      {/* ── Collapsible panel (slides down from bottom) ── */}
       <div
-        className="overflow-hidden transition-all duration-300"
+        className="overflow-hidden transition-all duration-300 ease-out"
         style={{
           maxHeight: isPanelOpen ? '420px' : '0px',
-          opacity: isPanelOpen ? 1 : 0,
         }}
       >
         <div
-          className="flex flex-col"
+          className="flex flex-col transition-transform duration-300 ease-out"
           style={{
             background: panelBg,
             borderTop: '1px solid rgba(255,255,255,0.08)',
+            transform: isPanelOpen ? 'translateY(0)' : 'translateY(100%)',
           }}
         >
           {/* Panel tabs */}
