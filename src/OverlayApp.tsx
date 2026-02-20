@@ -202,7 +202,7 @@ export default function OverlayApp() {
         )}
       </div>
 
-      {/* ── Collapsible panel (slides down from bottom) ── */}
+      {/* ── Collapsible panel (slides down from top) ── */}
       <div
         className="overflow-hidden transition-all duration-300 ease-out"
         style={{
@@ -214,7 +214,7 @@ export default function OverlayApp() {
           style={{
             background: panelBg,
             borderTop: '1px solid rgba(255,255,255,0.08)',
-            transform: isPanelOpen ? 'translateY(0)' : 'translateY(100%)',
+            transform: isPanelOpen ? 'translateY(0)' : 'translateY(-100%)',
           }}
         >
           {/* Panel tabs */}
